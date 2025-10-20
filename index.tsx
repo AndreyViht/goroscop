@@ -308,10 +308,19 @@ const App = () => {
     const [zodiacSign, setZodiacSign] = useState<ZodiacSign | null>(null);
 
     useEffect(() => {
-        const savedDate = localStorage.getItem('birthDate');
-        if (savedDate) {
-            const { day, month } = JSON.parse(savedDate);
-            setZodiacSign(getZodiacSign(parseInt(day), parseInt(month)));
+        try {
+            const savedDateString = localStorage.getItem('birthDate');
+            if (savedDateString) {
+                const savedDateObject = JSON.parse(savedDateString);
+                if (savedDateObject && savedDateObject.day && savedDateObject.month) {
+                    setZodiacSign(getZodiacSign(parseInt(savedDateObject.day), parseInt(savedDateObject.month)));
+                }
+            }
+        } catch (error) {
+            console.error("Failed to parse birthDate from localStorage:", error);
+            // If parsing fails, it's safer to just clear the invalid data
+            localStorage.removeItem('birthDate');
+            setZodiacSign(null); // Ensure we show the date selector
         }
     }, []);
 

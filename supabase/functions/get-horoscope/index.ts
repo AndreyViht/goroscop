@@ -1,6 +1,4 @@
-/// <reference types="https://esm.sh/@supabase/functions-js@2" />
-
-import { GoogleGenAI, Modality } from 'https://esm.sh/@google/genai@0.14.0';
+import { GoogleGenAI, Modality, GenerateContentResponse } from 'https://esm.sh/@google/genai@0.14.0';
 
 // --- CORS HEADERS ---
 const corsHeaders = {
@@ -57,7 +55,8 @@ Deno.serve(async (req) => {
     // --- TEXT GENERATION ---
     const textPrompt = `Создай подробный, проницательный и вдохновляющий гороскоп для знака зодиака ${sign} на ${period}, используя астрологические данные. Гороскоп должен быть хорошо структурирован. Добавь релевантные смайлики. Сначала предоставь краткую сводку (2-3 предложения), а затем развернутое предсказание (минимум БОЛЬШИХ 4 абзаца), ПРО карьеру, здоровье И ПРО БУДУЩЕЕ. Раздели краткое и подробное описание тремя вертикальными чертами '|||'.`;
 
-    const textResponse = await fetchWithRetry(() => ai.models.generateContent({
+    // Fix: Explicitly type the API response to resolve property access errors.
+    const textResponse: GenerateContentResponse = await fetchWithRetry(() => ai.models.generateContent({
       model: textModel,
       contents: textPrompt,
       config: { tools: [{ googleSearch: {} }] },
@@ -75,7 +74,8 @@ Deno.serve(async (req) => {
     // --- IMAGE GENERATION ---
     const imagePrompt = `Создай красивое и загадочное астрологическое изображение для знака зодиака ${sign}. Стиль: фэнтези-арт, космическая тематика, с символом знака ${sign}. Атмосфера должна соответствовать прогнозу: ${summary}.`;
 
-    const imageResponse = await fetchWithRetry(() => ai.models.generateContent({
+    // Fix: Explicitly type the API response to resolve property access errors.
+    const imageResponse: GenerateContentResponse = await fetchWithRetry(() => ai.models.generateContent({
       model: imageModel,
       contents: { parts: [{ text: imagePrompt }] },
       config: { responseModalities: [Modality.IMAGE] },
