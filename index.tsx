@@ -18,7 +18,15 @@ type Horoscope = {
     updated_at?: string;
 };
 
-const ZODIAC_SIGNS = [
+// FIX: Add ZodiacSign type for better type safety.
+type ZodiacSign = {
+    name: string;
+    symbol: string;
+    start: number[];
+    end: number[];
+};
+
+const ZODIAC_SIGNS: ZodiacSign[] = [
     { name: "Овен", symbol: "♈", start: [3, 21], end: [4, 19] },
     { name: "Телец", symbol: "♉", start: [4, 20], end: [5, 20] },
     { name: "Близнецы", symbol: "♊", start: [5, 21], end: [6, 20] },
@@ -36,7 +44,8 @@ const ZODIAC_SIGNS = [
 const PERIODS_ORDER = ['Вчера', 'Сегодня', 'Завтра', 'Неделю', 'Год'];
 
 // --- HELPER FUNCTIONS ---
-const getZodiacSign = (day: number, month: number) => {
+// FIX: Add return type annotation.
+const getZodiacSign = (day: number, month: number): ZodiacSign | null => {
     for (const sign of ZODIAC_SIGNS) {
         const [startMonth, startDay] = sign.start;
         const [endMonth, endDay] = sign.end;
@@ -46,7 +55,7 @@ const getZodiacSign = (day: number, month: number) => {
     }
     // Handle Capricorn case which spans across years
     if (month === 12 && day >= 22 || month === 1 && day <= 19) {
-        return ZODIAC_SIGNS.find(s => s.name === "Козерог");
+        return ZODIAC_SIGNS.find(s => s.name === "Козерог")!;
     }
     return null;
 };
@@ -154,7 +163,14 @@ const HoroscopeCard = ({ horoscope, isLoading }) => {
     );
 };
 
-const HoroscopeView = ({ sign, horoscopes, setBirthDate }) => {
+// FIX: Add types for component props to resolve type inference issues that cause the spread operator error.
+type HoroscopeViewProps = {
+    sign: ZodiacSign;
+    horoscopes: Horoscope[];
+    setBirthDate: (date: string | null) => void;
+};
+
+const HoroscopeView = ({ sign, horoscopes, setBirthDate }: HoroscopeViewProps) => {
     const cardsContainerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -269,7 +285,8 @@ const DateInput = ({ setBirthDate }) => {
 
 const App = () => {
     const [birthDate, setBirthDate] = useState<string | null>(localStorage.getItem('birthDate'));
-    const [zodiacSign, setZodiacSign] = useState<any>(null);
+    // FIX: Use the specific ZodiacSign type instead of any.
+    const [zodiacSign, setZodiacSign] = useState<ZodiacSign | null>(null);
     const [horoscopes, setHoroscopes] = useState<Horoscope[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
