@@ -1,299 +1,328 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
+/// <reference types="vite/client" />
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import ReactDOM from 'react-dom/client';
 
-const SUPABASE_URL = 'https://irtwyprryptdqtusxjvc.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlydHd5cHJyeXB0ZHF0dXN4anZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0ODA3NzIsImV4cCI6MjA3NDA1Njc3Mn0.YcL9S3a_RxK9CuWNkhicjCLVbTf0jTmLvsbwxXLkB4w';
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// --- SUPABASE SETUP ---
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-const PERIODS = ['Вчера', 'Сегодня', 'Завтра', 'Неделю', 'Год'];
-
-interface Horoscope {
-  summary: string;
-  details: string;
-  imageUrl: string; // Renamed from image_base64 for consistency
-  loading: boolean;
-  sources: { uri: string; title: string }[];
-}
-
-type Horoscopes = Record<string, Horoscope>;
-
-// --- Helper Functions ---
-const getZodiacSign = (date: Date): { sign: string; emoji: string } => {
-    const day = date.getDate();
-    const month = date.getMonth() + 1;
-    if ((month === 3 && day >= 21) || (month === 4 && day <= 19)) return { sign: "Овен", emoji: "♈" };
-    if ((month === 4 && day >= 20) || (month === 5 && day <= 20)) return { sign: "Телец", emoji: "♉" };
-    if ((month === 5 && day >= 21) || (month === 6 && day <= 21)) return { sign: "Близнецы", emoji: "♊" };
-    if ((month === 6 && day >= 22) || (month === 7 && day <= 22)) return { sign: "Рак", emoji: "♋" };
-    if ((month === 7 && day >= 23) || (month === 8 && day <= 22)) return { sign: "Лев", emoji: "♌" };
-    if ((month === 8 && day >= 23) || (month === 9 && day <= 22)) return { sign: "Дева", emoji: "♍" };
-    if ((month === 9 && day >= 23) || (month === 10 && day <= 23)) return { sign: "Весы", emoji: "♎" };
-    if ((month === 10 && day >= 24) || (month === 11 && day <= 22)) return { sign: "Скорпион", emoji: "♏" };
-    if ((month === 11 && day >= 23) || (month === 12 && day <= 21)) return { sign: "Стрелец", emoji: "♐" };
-    if ((month === 12 && day >= 22) || (month === 1 && day <= 20)) return { sign: "Козерог", emoji: "♑" };
-    if ((month === 1 && day >= 21) || (month === 2 && day <= 18)) return { sign: "Водолей", emoji: "♒" };
-    if ((month === 2 && day >= 19) || (month === 3 && day <= 20)) return { sign: "Рыбы", emoji: "♓" };
-    return { sign: "Неизвестно", emoji: "✨" };
+// --- TYPES & CONSTANTS ---
+type Horoscope = {
+    period: string;
+    summary: string;
+    details: string;
+    image_base64: string;
+    sources: { uri: string; title: string }[];
+    updated_at?: string;
 };
 
-const formatTime = (totalSeconds: number) => {
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    return `${hours.toString().padStart(2, '0')} часов ${minutes.toString().padStart(2, '0')} минут`;
+const ZODIAC_SIGNS = [
+    { name: "Овен", symbol: "♈", start: [3, 21], end: [4, 19] },
+    { name: "Телец", symbol: "♉", start: [4, 20], end: [5, 20] },
+    { name: "Близнецы", symbol: "♊", start: [5, 21], end: [6, 20] },
+    { name: "Рак", symbol: "♋", start: [6, 21], end: [7, 22] },
+    { name: "Лев", symbol: "♌", start: [7, 23], end: [8, 22] },
+    { name: "Дева", symbol: "♍", start: [8, 23], end: [9, 22] },
+    { name: "Весы", symbol: "♎", start: [9, 23], end: [10, 22] },
+    { name: "Скорпион", symbol: "♏", start: [10, 23], end: [11, 21] },
+    { name: "Стрелец", symbol: "♐", start: [11, 22], end: [12, 21] },
+    { name: "Козерог", symbol: "♑", start: [12, 22], end: [1, 19] },
+    { name: "Водолей", symbol: "♒", start: [1, 20], end: [2, 18] },
+    { name: "Рыбы", symbol: "♓", start: [2, 19], end: [3, 20] },
+];
+
+const PERIODS_ORDER = ['Вчера', 'Сегодня', 'Завтра', 'Неделю', 'Год'];
+
+// --- HELPER FUNCTIONS ---
+const getZodiacSign = (day: number, month: number) => {
+    for (const sign of ZODIAC_SIGNS) {
+        const [startMonth, startDay] = sign.start;
+        const [endMonth, endDay] = sign.end;
+        if ((month === startMonth && day >= startDay) || (month === endMonth && day <= endDay)) {
+            return sign;
+        }
+    }
+    // Handle Capricorn case which spans across years
+    if (month === 12 && day >= 22 || month === 1 && day <= 19) {
+        return ZODIAC_SIGNS.find(s => s.name === "Козерог");
+    }
+    return null;
 };
 
+const getDaysInMonth = (month: number, year: number) => new Date(year, month, 0).getDate();
 
-// --- Components ---
-const CardLoader = () => (
-    <div className="card-loader">
-        <div className="spinner"></div>
-        <p>Создаем предсказание...</p>
-    </div>
-);
-
-const HoroscopeCard = ({ title, horoscope }: { title: string; horoscope: Horoscope }) => {
-    const [isExpanded, setIsExpanded] = useState(true);
-    const [isFullyExpanded, setIsFullyExpanded] = useState(false);
-
-    const handleHeaderClick = () => {
-        if (isExpanded) setIsFullyExpanded(false);
-        setIsExpanded(!isExpanded);
-    };
-
-    return (
-        <div className="card">
-            <button className="card-header" onClick={handleHeaderClick} aria-expanded={isExpanded} disabled={horoscope.loading}>
-                <h3>На {title}</h3>
-                <span aria-hidden="true">{isExpanded ? '−' : '+'}</span>
-            </button>
-            <div className={`card-content ${isExpanded ? 'expanded' : ''} ${horoscope.loading ? 'loading' : ''}`}>
-                <div className="card-body">
-                    {horoscope.loading ? <CardLoader /> : (
-                        <>
-                            {horoscope.imageUrl && <img src={horoscope.imageUrl} alt={`Астрологический образ для ${title}`} className="card-image"/>}
-                            <p className="card-summary">{horoscope.summary || 'Предсказание скоро появится...'}</p>
-                            {horoscope.details && (
-                                <>
-                                    <button className="read-more-button" onClick={() => setIsFullyExpanded(!isFullyExpanded)} aria-expanded={isFullyExpanded}>
-                                        {isFullyExpanded ? 'Свернуть' : 'Читать далее'}
-                                    </button>
-                                    <div className={`card-details-wrapper ${isFullyExpanded ? 'visible' : ''}`}>
-                                        <p className="card-details">{horoscope.details}</p>
-                                        {horoscope.sources && horoscope.sources.length > 0 && (
-                                            <div className="card-sources">
-                                                <h4>Источники:</h4>
-                                                <ul>{horoscope.sources.map((s, i) => <li key={i}><a href={s.uri} target="_blank" rel="noopener noreferrer">{s.title}</a></li>)}</ul>
-                                            </div>
-                                        )}
-                                    </div>
-                                </>
-                            )}
-                        </>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-};
+// --- COMPONENTS ---
 
 const UpdateInfo = () => {
     const [timeLeft, setTimeLeft] = useState('');
 
     useEffect(() => {
-        const calculateTimeLeft = () => {
+        const intervalId = setInterval(() => {
             const now = new Date();
             const moscowTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Moscow' }));
-            
+
             const nextUpdate = new Date(moscowTime);
-            nextUpdate.setDate(moscowTime.getDate() + (moscowTime.getHours() >= 0 && moscowTime.getMinutes() >= 1 ? 1 : 0));
-            nextUpdate.setHours(0, 1, 0, 0);
+            nextUpdate.setHours(24, 1, 0, 0); // Next day at 00:01
 
-            const diff = (nextUpdate.getTime() - moscowTime.getTime()) / 1000;
-            setTimeLeft(formatTime(diff));
-        };
+            const diff = nextUpdate.getTime() - moscowTime.getTime();
 
-        calculateTimeLeft();
-        const timer = setInterval(calculateTimeLeft, 60000); // Update every minute
-        return () => clearInterval(timer);
+            const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+            const minutes = Math.floor((diff / 1000 / 60) % 60);
+            
+            setTimeLeft(`${String(hours).padStart(2, '0')} часов ${String(minutes).padStart(2, '0')} минут`);
+        }, 1000);
+
+        return () => clearInterval(intervalId);
     }, []);
 
     return (
         <div className="update-info">
-            <h4>✨ Viht прогнозирует ваш гороскоп</h4>
-            <p className="timer">До обновления: <strong>{timeLeft}</strong></p>
+            <h4>Viht прогнозирует ваш гороскоп</h4>
+            <div className="timer">До обновления: <strong>{timeLeft}</strong></div>
             <p className="update-logic">
-                Гороскоп на 'Сегодня' и 'Завтра' обновляется каждый день в 00:01 МСК.
-                'Неделя' — каждый Понедельник. 'Год' — 1-го числа каждого месяца. 'Вчера' — не меняется.
+                'Сегодня' и 'Завтра' обновляются ежедневно в 00:01 МСК. 'Неделя' — каждый Понедельник. 'Год' — первого числа месяца.
             </p>
         </div>
     );
 };
 
 
-function App() {
-    const [date, setDate] = useState<{ day: string; month: string; year: string }>({ day: '', month: '', year: '' });
-    const [isDateSet, setIsDateSet] = useState(false);
-    const [zodiac, setZodiac] = useState<{ sign: string; emoji: string } | null>(null);
-    const [horoscopes, setHoroscopes] = useState<Horoscopes | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
+const Loader = ({ text = "Звёзды выстраиваются для вас..." }) => (
+    <div className="loader">
+        <div className="spinner"></div>
+        <p>{text}</p>
+    </div>
+);
 
-    const getHoroscopes = useCallback(async (currentDate: {day: string, month: string, year: string}) => {
-        if (!currentDate.day || !currentDate.month || !currentDate.year) {
+const ErrorMessage = ({ message, onRetry }) => (
+    <div className="container">
+        <div className="error-message">{message}</div>
+        {onRetry && <button onClick={onRetry} className="submit-button" style={{marginTop: '1rem'}}>Попробовать снова</button>}
+    </div>
+);
+
+const HoroscopeCard = ({ horoscope, isLoading }) => {
+    const [isExpanded, setIsExpanded] = useState(true);
+    const [isFullyExpanded, setIsFullyExpanded] = useState(false);
+
+    const toggleExpansion = () => setIsExpanded(!isExpanded);
+    const toggleFullExpansion = () => setIsFullyExpanded(!isFullyExpanded);
+    
+    return (
+        <div className="card">
+            <button className="card-header" onClick={toggleExpansion} aria-expanded={isExpanded}>
+                <h3>На {horoscope.period}</h3>
+                <span>{isExpanded ? '-' : '+'}</span>
+            </button>
+            <div className={`card-content ${isExpanded ? 'expanded' : ''} ${isLoading ? 'loading' : ''}`}>
+                {isLoading ? (
+                    <div className="card-loader">
+                        <div className="spinner"></div>
+                        <p>Генерация...</p>
+                    </div>
+                ) : (
+                    <div className="card-body">
+                        {horoscope.image_base64 && <img src={horoscope.image_base64} alt={`Арт для гороскопа на ${horoscope.period}`} className="card-image" />}
+                        <p className="card-summary">{horoscope.summary}</p>
+                        
+                        {horoscope.details && (
+                             <>
+                                <button onClick={toggleFullExpansion} className="read-more-button">
+                                    {isFullyExpanded ? 'Свернуть' : 'Читать далее'}
+                                </button>
+                                <div className={`card-details-wrapper ${isFullyExpanded ? 'visible' : ''}`}>
+                                    <p className="card-details">{horoscope.details}</p>
+                                    {horoscope.sources && horoscope.sources.length > 0 && (
+                                        <div className="card-sources">
+                                            <h4>Источники</h4>
+                                            <ul>
+                                                {horoscope.sources.map(source => (
+                                                    <li key={source.uri}><a href={source.uri} target="_blank" rel="noopener noreferrer">{source.title}</a></li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                             </>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const HoroscopeView = ({ sign, horoscopes, setBirthDate }) => {
+    const cardsContainerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const slider = cardsContainerRef.current;
+        if (!slider) return;
+
+        let isDown = false;
+        let startX: number;
+        let scrollLeft: number;
+
+        const handleMouseDown = (e: MouseEvent) => {
+            isDown = true;
+            slider.classList.add('grabbing');
+            startX = e.pageX - slider.offsetLeft;
+            scrollLeft = slider.scrollLeft;
+        };
+        const handleMouseLeaveOrUp = () => {
+            isDown = false;
+            slider.classList.remove('grabbing');
+        };
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isDown) return;
+            e.preventDefault();
+            const x = e.pageX - slider.offsetLeft;
+            const walk = (x - startX) * 2;
+            slider.scrollLeft = scrollLeft - walk;
+        };
+
+        slider.addEventListener('mousedown', handleMouseDown);
+        slider.addEventListener('mouseleave', handleMouseLeaveOrUp);
+        slider.addEventListener('mouseup', handleMouseLeaveOrUp);
+        slider.addEventListener('mousemove', handleMouseMove);
+
+        return () => {
+            slider.removeEventListener('mousedown', handleMouseDown);
+            slider.removeEventListener('mouseleave', handleMouseLeaveOrUp);
+            slider.removeEventListener('mouseup', handleMouseLeaveOrUp);
+            slider.removeEventListener('mousemove', handleMouseMove);
+        };
+    }, []);
+    
+    const sortedHoroscopes = useMemo(() => {
+        const horoscopeMap = new Map(horoscopes.map(h => [h.period, h]));
+        return PERIODS_ORDER.map(period => ({
+            period,
+            ...(horoscopeMap.get(period) || { summary: '', details: '', image_base64: '', sources: [] })
+        }));
+    }, [horoscopes]);
+
+    return (
+        <>
+            <div className="header-section">
+                <h1 className="zodiac-title">{sign.name} {sign.symbol}</h1>
+                <button onClick={() => { localStorage.removeItem('birthDate'); setBirthDate(null); }} className="change-date-button">Сменить дату</button>
+            </div>
+            <UpdateInfo />
+            <div className="horoscope-cards" ref={cardsContainerRef}>
+                {sortedHoroscopes.map((horo, index) => (
+                    <HoroscopeCard 
+                        key={index} 
+                        horoscope={horo as Horoscope}
+                        isLoading={!horo.summary}
+                    />
+                ))}
+            </div>
+        </>
+    );
+};
+
+
+const DateInput = ({ setBirthDate }) => {
+    const [day, setDay] = useState('');
+    const [month, setMonth] = useState('');
+    const [year, setYear] = useState('');
+
+    const days = useMemo(() => {
+        const numDays = (month && year) ? getDaysInMonth(parseInt(month), parseInt(year)) : 31;
+        return Array.from({ length: numDays }, (_, i) => i + 1);
+    }, [month, year]);
+
+    const years = useMemo(() => {
+        const currentYear = new Date().getFullYear();
+        return Array.from({ length: 100 }, (_, i) => currentYear - i);
+    }, []);
+
+    const months = [ "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь" ];
+    
+    const handleSubmit = () => {
+        if (day && month && year) {
+            const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            localStorage.setItem('birthDate', date);
+            setBirthDate(date);
+        }
+    };
+
+    return (
+        <>
+            <h1 className="title">Ваш Персональный Гороскоп</h1>
+            <div className="input-section">
+                <label className="input-label">Введите вашу дату рождения</label>
+                <div className="date-selectors">
+                    <select value={day} onChange={e => setDay(e.target.value)}><option value="">День</option>{days.map(d => <option key={d} value={d}>{d}</option>)}</select>
+                    <select value={month} onChange={e => setMonth(e.target.value)}><option value="">Месяц</option>{months.map((m, i) => <option key={i+1} value={i+1}>{m}</option>)}</select>
+                    <select value={year} onChange={e => setYear(e.target.value)}><option value="">Год</option>{years.map(y => <option key={y} value={y}>{y}</option>)}</select>
+                </div>
+                <button onClick={handleSubmit} disabled={!day || !month || !year} className="submit-button">Узнать гороскоп</button>
+            </div>
+        </>
+    );
+};
+
+
+const App = () => {
+    const [birthDate, setBirthDate] = useState<string | null>(localStorage.getItem('birthDate'));
+    const [zodiacSign, setZodiacSign] = useState<any>(null);
+    const [horoscopes, setHoroscopes] = useState<Horoscope[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!birthDate) {
             setLoading(false);
             return;
         }
-        setError('');
-        
-        const birthDate = new Date(`${currentDate.year}-${currentDate.month}-${currentDate.day}`);
-        const currentZodiac = getZodiacSign(birthDate);
-        setZodiac(currentZodiac);
-        setIsDateSet(true);
-        setLoading(false);
-        
-        localStorage.setItem('horoscopeDate', JSON.stringify(currentDate));
-        
-        const initialHoroscopes = PERIODS.reduce((acc, period) => {
-            acc[period] = { summary: '', details: '', imageUrl: '', loading: true, sources: [] };
-            return acc;
-        }, {} as Horoscopes);
-        setHoroscopes(initialHoroscopes);
 
-        try {
-            const { data, error: functionError } = await supabase.functions.invoke('get-horoscope', {
-                body: { sign: currentZodiac.sign },
-            });
+        const [year, month, day] = birthDate.split('-').map(Number);
+        const sign = getZodiacSign(day, month);
+        setZodiacSign(sign);
 
-            if (functionError) throw functionError;
-            if (data.error) throw new Error(data.error);
-
-            // Populate horoscopes with data from backend
-            const fetchedHoroscopes = PERIODS.reduce((acc, period) => {
-                const horoscopeData = data.find(h => h.period === period);
-                acc[period] = {
-                    summary: horoscopeData?.summary || 'Предсказание скоро появится...',
-                    details: horoscopeData?.details || '',
-                    imageUrl: horoscopeData?.image_base64 || '',
-                    loading: false,
-                    sources: horoscopeData?.sources || [],
-                };
-                return acc;
-            }, {} as Horoscopes);
-            setHoroscopes(fetchedHoroscopes);
-
-        } catch (e: any) {
-            console.error("Ошибка при вызове функции Supabase:", e);
-            setError(`Не удалось загрузить гороскоп. Ошибка: ${e.message}`);
-            const errorState = PERIODS.reduce((acc, period) => {
-                acc[period] = { summary: 'Ошибка загрузки', details: '', imageUrl: '', loading: false, sources: [] };
-                return acc;
-            }, {} as Horoscopes);
-            setHoroscopes(errorState);
-        }
-    }, []);
-
-    useEffect(() => {
-        const checkSavedDate = () => {
+        const fetchHoroscopes = async () => {
+            if (!sign) return;
+            setLoading(true);
+            setError(null);
+            setHoroscopes([]); // Clear old horoscopes
             try {
-                const savedDate = localStorage.getItem('horoscopeDate');
-                if (savedDate) {
-                    const parsedDate = JSON.parse(savedDate);
-                    setDate(parsedDate);
-                    getHoroscopes(parsedDate);
-                } else {
-                    setLoading(false);
-                }
-            } catch (e) {
-                console.error("Ошибка чтения localStorage", e);
-                localStorage.removeItem('horoscopeDate');
+                const { data, error: functionError } = await supabase.functions.invoke('get-horoscope', {
+                    body: { sign: sign.name },
+                });
+
+                if (functionError) throw functionError;
+                if (!Array.isArray(data)) throw new Error("Получен некорректный ответ от сервера.");
+
+                setHoroscopes(data);
+            } catch (err: any) {
+                console.error(err);
+                setError(`Не удалось загрузить гороскоп: ${err.message}`);
+            } finally {
                 setLoading(false);
             }
         };
-        checkSavedDate();
-    }, [getHoroscopes]);
 
-    // Grab-to-scroll functionality
-    useEffect(() => {
-        const slider = scrollContainerRef.current;
-        if (!slider) return;
-        let isDown = false, startX: number, scrollLeft: number;
-        const onMouseDown = (e: MouseEvent) => { isDown = true; slider.classList.add('grabbing'); startX = e.pageX - slider.offsetLeft; scrollLeft = slider.scrollLeft; };
-        const onMouseLeave = () => { isDown = false; slider.classList.remove('grabbing'); };
-        const onMouseUp = () => { isDown = false; slider.classList.remove('grabbing'); };
-        const onMouseMove = (e: MouseEvent) => { if (!isDown) return; e.preventDefault(); const x = e.pageX - slider.offsetLeft; const walk = (x - startX) * 2; slider.scrollLeft = scrollLeft - walk; };
-        slider.addEventListener('mousedown', onMouseDown);
-        slider.addEventListener('mouseleave', onMouseLeave);
-        slider.addEventListener('mouseup', onMouseUp);
-        slider.addEventListener('mousemove', onMouseMove);
-        return () => {
-            slider.removeEventListener('mousedown', onMouseDown);
-            slider.removeEventListener('mouseleave', onMouseLeave);
-            slider.removeEventListener('mouseup', onMouseUp);
-            slider.removeEventListener('mousemove', onMouseMove);
-        };
-    }, [isDateSet]);
+        fetchHoroscopes();
+    }, [birthDate]);
 
-    const handleDateChange = () => {
-        localStorage.removeItem('horoscopeDate');
-        setIsDateSet(false);
-        setZodiac(null);
-        setHoroscopes(null);
-        setDate({ day: '', month: '', year: '' });
+    const renderContent = () => {
+        if (loading) return <Loader />;
+        if (error) return <ErrorMessage message={error} onRetry={() => setBirthDate(localStorage.getItem('birthDate'))} />;
+        if (birthDate && zodiacSign) {
+            return <HoroscopeView sign={zodiacSign} horoscopes={horoscopes} setBirthDate={setBirthDate} />;
+        }
+        return <DateInput setBirthDate={setBirthDate} />;
     };
-    
-    const years = useMemo(() => Array.from({length: new Date().getFullYear() - 1939}, (_, i) => new Date().getFullYear() - i), []);
-    const months = useMemo(() => [
-        {value: "01", name: "Январь"}, {value: "02", name: "Февраль"}, {value: "03", name: "Март"},
-        {value: "04", name: "Апрель"}, {value: "05", name: "Май"}, {value: "06", name: "Июнь"},
-        {value: "07", name: "Июль"}, {value: "08", name: "Август"}, {value: "09", name: "Сентябрь"},
-        {value: "10", name: "Октябрь"}, {value: "11", name: "Ноябрь"}, {value: "12", name: "Декабрь"}
-    ], []);
-
-    if (loading && !isDateSet) {
-        return <div className="container"><div className="loader"><div className="spinner"></div><p>Звезды выстраиваются для вас...</p></div></div>;
-    }
-
-    if (!isDateSet) {
-        return (
-            <div className="container">
-                <h1 className="title">🔮 Ваш Гороскоп 🔮</h1>
-                <div className="input-section">
-                    <label className="input-label">Выберите вашу дату рождения:</label>
-                    <div className="date-selectors">
-                        <select value={date.day} onChange={e => setDate({...date, day: e.target.value})} aria-label="День"><option value="" disabled>День</option>{[...Array(31).keys()].map(i => <option key={i+1} value={i+1}>{i+1}</option>)}</select>
-                        <select value={date.month} onChange={e => setDate({...date, month: e.target.value})} aria-label="Месяц"><option value="" disabled>Месяц</option>{months.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}</select>
-                        <select value={date.year} onChange={e => setDate({...date, year: e.target.value})} aria-label="Год"><option value="" disabled>Год</option>{years.map(y => <option key={y} value={y}>{y}</option>)}</select>
-                    </div>
-                    <button onClick={() => getHoroscopes(date)} disabled={!date.day || !date.month || !date.year} className="submit-button">Войти</button>
-                </div>
-                {error && <p className="error-message">{error}</p>}
-            </div>
-        );
-    }
 
     return (
         <div className="container">
-            {zodiac && (
-                <div className="header-section">
-                    <h1 className="zodiac-title">{zodiac.sign} {zodiac.emoji}</h1>
-                    <button onClick={handleDateChange} className="change-date-button">Сменить дату</button>
-                </div>
-            )}
-            <UpdateInfo />
-            {error && <p className="error-message">{error}</p>}
-            {horoscopes && (
-                <div className="horoscope-cards" ref={scrollContainerRef}>
-                    {PERIODS.map(period => <HoroscopeCard key={period} title={period} horoscope={horoscopes[period]}/>)}
-                </div>
-            )}
+            {renderContent()}
         </div>
     );
-}
+};
 
-ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
+createRoot(document.getElementById('root')!).render(<App />);

@@ -1,5 +1,12 @@
-// FIX: Add a reference to Deno's global types to resolve "Cannot find name 'Deno'" errors.
-/// <reference types="https://esm.sh/v135/@deno/deno@1.44.4/~/globals.d.ts" />
+// FIX: Manually declare Deno types because the checker environment cannot resolve the remote type definitions.
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+  serve(handler: (req: Request) => Promise<Response> | Response): {
+    shutdown: () => Promise<void>;
+  };
+};
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenAI, Modality } from 'https://esm.sh/@google/genai@0.14.0';
 
@@ -31,6 +38,7 @@ async function generateSingleHoroscope(sign: string, period: string) {
       ?.map(chunk => chunk.web)
       .filter((web): web is { uri: string; title: string } => !!(web?.uri && web.title)) || [];
       
+    // Fix: Corrected variable name typo from image_base664 to image_base64 to prevent runtime errors.
     let image_base64 = '';
     const imagePart = imageGenResponse.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
     if (imagePart?.inlineData) {
