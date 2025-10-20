@@ -1,0 +1,195 @@
+/* General Body Styles */
+:root {
+    --primary-bg: #0c0a1a;
+    --card-bg: rgba(25, 22, 53, 0.7);
+    --glow-color: rgba(168, 85, 247, 0.6);
+    --text-color: #e0e0e0;
+    --accent-color: #a855f7;
+    --title-font: 'Montserrat', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+
+body {
+    font-family: var(--title-font);
+    background-color: var(--primary-bg);
+    color: var(--text-color);
+    background-image:
+        radial-gradient(white, rgba(255, 255, 255, 0.2) 2px, transparent 40px),
+        radial-gradient(white, rgba(255, 255, 255, 0.15) 1px, transparent 30px);
+    background-size: 550px 550px, 350px 350px;
+    background-position: 0 0, 40px 60px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+}
+
+/* Main Container & Titles */
+.container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 1.5rem 0;
+    width: 100%;
+}
+
+.title, .zodiac-title {
+    font-size: clamp(1.8rem, 7vw, 3rem);
+    font-weight: 700;
+    color: white;
+    text-shadow: 0 0 10px var(--glow-color), 0 0 20px var(--glow-color);
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+.zodiac-title { margin-bottom: 0; }
+
+/* Date Input Section */
+.input-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    width: 90%;
+    max-width: 450px;
+    padding: 1.5rem;
+    background: var(--card-bg);
+    border-radius: 20px;
+    border: 1px solid var(--glow-color);
+    box-shadow: 0 0 25px var(--glow-color);
+}
+.input-label { font-size: clamp(0.9rem, 4vw, 1.1rem); }
+.date-selectors { display: flex; gap: 0.5rem; width: 100%; flex-wrap: wrap; }
+
+select {
+    flex: 1;
+    min-width: 70px;
+    padding: 0.6rem;
+    background-color: var(--primary-bg);
+    color: var(--text-color);
+    border: 1px solid var(--accent-color);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    cursor: pointer;
+    -webkit-appearance: none; -moz-appearance: none; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23a855f7' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    background-size: 0.9em;
+}
+
+/* Buttons */
+.submit-button, .change-date-button {
+    padding: 0.7rem 1.8rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: white;
+    background: linear-gradient(45deg, #6d28d9, #a855f7);
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.5);
+}
+.submit-button:hover, .change-date-button:hover { transform: translateY(-3px); box-shadow: 0 0 25px var(--glow-color); }
+.submit-button:disabled { background: #555; cursor: not-allowed; transform: none; box-shadow: none; }
+.change-date-button { font-size: 0.8rem; padding: 0.4rem 0.8rem; background: transparent; border: 1px solid var(--accent-color); }
+
+/* Header & Update Info */
+.header-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    max-width: 900px;
+    margin-bottom: 1rem;
+    padding: 0 5%;
+}
+
+.update-info {
+    width: 90%;
+    max-width: 400px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    background: var(--card-bg);
+    border: 1px solid var(--glow-color);
+    border-radius: 12px;
+    text-align: center;
+}
+.update-info h4 { font-size: 1rem; color: white; margin-bottom: 0.25rem; }
+.update-info .timer { font-size: 0.9rem; margin-bottom: 0.5rem; }
+.update-info .timer strong { color: var(--accent-color); }
+.update-info .update-logic { font-size: 0.7rem; color: #aaa; line-height: 1.4; }
+
+/* Loader & Error */
+.loader { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; }
+.loader p { font-size: 1.2rem; }
+.spinner { width: 50px; height: 50px; border: 5px solid rgba(255, 255, 255, 0.3); border-top-color: var(--accent-color); border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.error-message { color: #ff7b7b; margin-top: 1rem; text-align: center; background-color: rgba(255, 0, 0, 0.1); padding: 0.8rem; border-radius: 10px; border: 1px solid #ff7b7b; width: 90%; max-width: 400px; }
+
+/* Horoscope Cards */
+.horoscope-cards {
+    position: relative;
+    display: flex;
+    width: 100%;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 1rem;
+    padding: 1rem 0;
+    cursor: grab;
+    user-select: none;
+    -ms-overflow-style: none; scrollbar-width: none;
+}
+.horoscope-cards.grabbing { cursor: grabbing; }
+.horoscope-cards::-webkit-scrollbar { display: none; }
+.horoscope-cards::after { content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 50px; background: linear-gradient(to left, var(--primary-bg), transparent); pointer-events: none; z-index: 2; }
+
+/* Individual Card */
+.card {
+    flex: 0 0 85%;
+    max-width: 350px;
+    scroll-snap-align: center;
+    background: var(--card-bg);
+    border-radius: 20px;
+    border: 1px solid var(--glow-color);
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.2);
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+}
+.card:first-child { margin-left: 7.5%; }
+.card:last-child { margin-right: 7.5%; }
+
+.card-header { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 1rem 1.25rem; background: none; border: none; color: white; cursor: pointer; text-align: left; }
+.card-header h3 { font-size: clamp(1.1rem, 5vw, 1.3rem); }
+.card-header span { font-size: 1.8rem; font-weight: 300; color: var(--accent-color); }
+
+.card-content { max-height: 0; overflow: hidden; transition: max-height 0.7s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.card-content.expanded { max-height: 2000px; }
+.card-content.loading { max-height: 250px; }
+.card-body { padding: 0 1.25rem 1.25rem; }
+
+.card-loader { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; padding: 2rem 0; min-height: 200px; }
+.card-loader .spinner { width: 30px; height: 30px; border-width: 3px; }
+.card-loader p { font-size: 1rem; }
+
+.card-image { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 12px; margin-bottom: 1rem; border: 1px solid var(--glow-color); }
+.card-summary { font-size: clamp(0.9rem, 3.5vw, 1rem); line-height: 1.6; margin-bottom: 1rem; }
+
+.read-more-button { font-family: inherit; font-size: 0.9rem; font-weight: 700; color: var(--accent-color); background: none; border: none; padding: 0.5rem 0; cursor: pointer; transition: color 0.3s ease; }
+.read-more-button:hover { color: white; }
+
+.card-details-wrapper { max-height: 0; overflow: hidden; transition: max-height 0.7s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.card-details-wrapper.visible { max-height: 2000px; }
+.card-details { font-size: clamp(0.85rem, 3vw, 0.95rem); line-height: 1.7; padding-top: 1rem; white-space: pre-wrap; }
+
+.card-sources { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(168, 85, 247, 0.3); }
+.card-sources h4 { font-size: 0.9rem; color: var(--accent-color); margin-bottom: 0.5rem; }
+.card-sources ul { list-style: none; }
+.card-sources li { margin-bottom: 0.25rem; }
+.card-sources a { color: var(--text-color); font-size: 0.8rem; text-decoration: none; opacity: 0.8; transition: opacity 0.3s ease; }
+.card-sources a:hover { opacity: 1; text-decoration: underline; }
