@@ -1,117 +1,147 @@
-// FIX: Manually declare Deno types because the checker environment cannot resolve the remote type definitions.
-declare const Deno: {
-  env: {
-    get(key: string): string | undefined;
-  };
-  serve(handler: (req: Request) => Promise<Response> | Response): {
-    shutdown: () => Promise<void>;
-  };
-};
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { GoogleGenAI, Modality } from 'https://esm.sh/@google/genai@0.14.0';
+/// <reference types="https://esm.sh/@supabase/functions-js/src/edge-runtime.d.ts" />
 
-// --- CONFIGURATION ---
-// Gemini API Key should be set in Supabase Edge Function secrets
+import { createClient } from '@supabase/supabase-js';
+import { GoogleGenAI, Modality } from '@google/genai';
+
+// --- SETUP ---
 const ai = new GoogleGenAI({ apiKey: Deno.env.get('API_KEY')! });
-const PERIODS = ['Вчера', 'Сегодня', 'Завтра', 'Неделю', 'Год'];
-const CORS_HEADERS = {
+const supabaseAdmin = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+);
+
+const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// --- HELPER: GEMINI CONTENT GENERATION ---
-async function generateSingleHoroscope(sign: string, period: string) {
-  console.log(`Generating horoscope for ${sign} - ${period}...`);
-  try {
-    const textPrompt = `Создай подробный, проницательный и вдохновляющий гороскоп для знака зодиака ${sign} на ${period}, используя астрологические данные и текущие планетарные транзиты. Гороскоп должен быть хорошо структурирован и легко читаем. Добавь релевантные смайлики для атмосферы. Сначала предоставь краткую, интригующую сводку (2-3 предложения), а затем развернутое предсказание (минимум 4 абзаца), охватывающее ключевые сферы жизни: любовь, карьера, здоровье. Раздели краткое и подробное описание тремя вертикальными чертами '|||'.`;
-    const imagePrompt = `Фэнтези-арт, символизирующий гороскоп для знака ${sign} на ${period}. Мистический, космический стиль, высокое разрешение. Например: "Мистический баран с рогами из звезд, стоящий на космическом облаке, символизирующий Овна."`;
+// --- HELPER FUNCTIONS ---
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-    const [textResponse, imageGenResponse] = await Promise.all([
-      ai.models.generateContent({ model: 'gemini-2.5-flash', contents: textPrompt, config: { tools: [{ googleSearch: {} }] } }),
-      ai.models.generateContent({ model: 'gemini-2.5-flash-image', contents: { parts: [{ text: imagePrompt }] }, config: { responseModalities: [Modality.IMAGE] } })
-    ]);
+async function generateSingleHoroscope(sign: string, period: string, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      console.log(`Attempt ${i+1}: Generating horoscope for ${sign} - ${period}`);
 
-    const sources = textResponse.candidates?.[0]?.groundingMetadata?.groundingChunks
-      ?.map(chunk => chunk.web)
-      .filter((web): web is { uri: string; title: string } => !!(web?.uri && web.title)) || [];
+      const textPrompt = `Создай подробный, проницательный и вдохновляющий гороскоп для знака зодиака ${sign} на ${period}, используя астрологические данные. Гороскоп должен быть хорошо структурирован. Добавь релевантные смайлики. Сначала предоставь краткую сводку (2-3 предложения), а затем развернутое предсказание (минимум 4 абзаца), охватывающее любовь, карьеру, здоровье. Раздели краткое и подробное описание тремя вертикальными чертами '|||'.`;
       
-    let image_base64 = '';
-    const imagePart = imageGenResponse.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
-    if (imagePart?.inlineData) {
-        image_base64 = `data:image/png;base64,${imagePart.inlineData.data}`;
-    }
+      const imagePrompt = `Fantasy art style, horoscope symbol for zodiac sign ${sign}, cosmic theme, magical, ethereal, vibrant colors, representing the period of '${period}'.`;
 
-    const [summary, details] = textResponse.text.split('|||').map(s => s.trim());
-    
-    return { zodiac_sign: sign, period, summary, details, image_base64, sources };
-  } catch (error) {
-    console.error(`Error generating for ${sign} - ${period}:`, error);
-    return { zodiac_sign: sign, period, summary: 'Не удалось сгенерировать предсказание.', details: error.message, image_base64: '', sources: [] };
+      const textPromise = ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: textPrompt,
+        config: { tools: [{ googleSearch: {} }] },
+      });
+
+      const imagePromise = ai.models.generateContent({
+          model: 'gemini-2.5-flash-image',
+          contents: { parts: [{ text: imagePrompt }] },
+          config: { responseModalities: [Modality.IMAGE] },
+      });
+
+      const [textResponse, imageGenResponse] = await Promise.all([textPromise, imagePromise]);
+      
+      const sources = textResponse.candidates?.[0]?.groundingMetadata?.groundingChunks
+        ?.map(chunk => chunk.web)
+        .filter((web): web is { uri: string; title: string } => !!(web?.uri && web.title)) || [];
+
+      let imageUrl = '';
+      const imagePart = imageGenResponse.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
+      if (imagePart?.inlineData) {
+        imageUrl = `data:image/png;base64,${imagePart.inlineData.data}`;
+      }
+
+      const [summary, details] = textResponse.text.split('|||').map(s => s.trim());
+
+      return { summary, details, imageUrl, sources };
+
+    } catch (error: any) {
+      console.error(`Error during generation attempt ${i+1}:`, error.message);
+      if (error.message.includes('429')) {
+        const retryDelayMatch = error.message.match(/Please retry in ([\d.]+)s/);
+        const retryDelay = retryDelayMatch ? (parseFloat(retryDelayMatch[1]) + 2) * 1000 : 60000;
+        
+        if (i < retries - 1) {
+          console.log(`Rate limit exceeded. Retrying in ${retryDelay / 1000} seconds...`);
+          await sleep(retryDelay);
+        } else {
+          console.error("Max retries reached. Failing.");
+          throw error;
+        }
+      } else {
+        throw error;
+      }
+    }
   }
+  throw new Error(`Failed to generate horoscope for ${sign} - ${period} after ${retries} retries.`);
 }
 
 // --- MAIN EDGE FUNCTION ---
 Deno.serve(async (req) => {
-  // CRITICAL FIX: Handle CORS preflight request immediately.
-  // This must happen before any other processing, especially before trying to parse the body.
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // Now that we've handled OPTIONS, we can safely parse the body for other request types.
-    const { sign } = await req.json();
-    if (!sign) {
-      return new Response(JSON.stringify({ error: "Знак зодиака не указан" }), {
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-        status: 400,
+    const { sign, period } = await req.json();
+    if (!sign || !period) {
+      throw new Error("Знак зодиака или период не указаны");
+    }
+
+    // 1. Check for cached data
+    const { data: existingHoroscope, error: fetchError } = await supabaseAdmin
+      .from('horoscopes')
+      .select('*')
+      .eq('zodiac_sign', sign)
+      .eq('period', period)
+      .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "Not Found", which is OK
+      throw fetchError;
+    }
+    
+    // 2. If cache exists, return it
+    if (existingHoroscope) {
+      console.log(`Cache hit for ${sign} - ${period}`);
+      return new Response(JSON.stringify(existingHoroscope), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
       });
     }
 
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
+    // 3. If no cache, generate new data
+    console.log(`Cache miss for ${sign} - ${period}. Generating...`);
+    const newHoroscope = await generateSingleHoroscope(sign, period);
 
-    const { data: existingHoroscopes, error: fetchError } = await supabaseAdmin
+    const { data: insertedData, error: insertError } = await supabaseAdmin
       .from('horoscopes')
-      .select('*')
-      .eq('zodiac_sign', sign);
-
-    if (fetchError) throw fetchError;
-
-    const existingPeriods = new Set(existingHoroscopes.map(h => h.period));
-    const missingPeriods = PERIODS.filter(p => !existingPeriods.has(p));
-
-    if (missingPeriods.length > 0) {
-      console.log(`Missing periods for ${sign}: ${missingPeriods.join(', ')}`);
-      const generationPromises = missingPeriods.map(period => generateSingleHoroscope(sign, period));
-      const newHoroscopes = await Promise.all(generationPromises);
-
-      if (newHoroscopes.length > 0) {
-        const { error: insertError } = await supabaseAdmin
-          .from('horoscopes')
-          .upsert(newHoroscopes);
-
-        if (insertError) throw insertError;
+      .insert({
+        zodiac_sign: sign,
+        period: period,
+        summary: newHoroscope.summary,
+        details: newHoroscope.details,
+        image_base64: newHoroscope.imageUrl,
+        sources: newHoroscope.sources,
+      })
+      .select()
+      .single();
       
-        const allHoroscopes = [...existingHoroscopes, ...newHoroscopes];
-        return new Response(JSON.stringify(allHoroscopes), {
-          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-          status: 200,
-        });
-      }
+    if (insertError) {
+      console.error('Error inserting into database:', insertError);
+      throw insertError;
     }
 
-    return new Response(JSON.stringify(existingHoroscopes), {
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    // 4. Return newly generated data
+    return new Response(JSON.stringify(insertedData), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
 
-  } catch (error) {
-    console.error('Critical error in Edge Function:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+  } catch (err: any) {
+    console.error('Main function error:', err);
+    return new Response(JSON.stringify({ error: err.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
     });
   }
